@@ -59,7 +59,7 @@ $(DYNAMIC_LIB): LDFLAGS += -install_name @rpath/$(LIB_NAME).dylib -current_versi
 $(DYNAMIC_LIB): $(OBJ_FILES)
 	@mkdir -p $(LIB_DIR)
 	$(CC) $(CFLAGS) $(LDFLAGS) -shared -o $@ $^
-	@ldid -S $@
+	@codesign -f -s - $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.m
 	@mkdir -p $(@D)
@@ -72,7 +72,7 @@ $(TESTS_OUTPUT_DIR)/%: $$(wildcard $(TESTS_SRC_DIR)/%/*.m) $(STATIC_LIB)
 	@rm -rf $@
 	$(CC) $(CFLAGS) $(LDFLAGS) -I$(OUTPUT_DIR)/include -o $@ $^
 	@if [ "$(TARGET)" = "ios" ]; then \
-		ldid -Smisc/ios_ents.plist $@; \
+		codesign -f -s - --entitlements misc/ios_ents.plist $@; \
 	fi
 endif
 
