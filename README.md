@@ -5,6 +5,7 @@ Just enough ZIP parsing to pull files from a remote ZIP file. Intended to proces
 ## TODO
 
 - See comments
+- Create tests that compare output from partial with output from (python) remotezip
 
 ## Credits
 

@@ -10,6 +10,9 @@
 #define ZIP64_IPSW_TEST_URL \
     @"https://updates.cdn-apple.com/2024WinterFCS/fullrestores/052-77579/4569734E-120C-4F31-AD08-FC1FF825D059/UniversalMac_14.4.1_23E224_Restore.ipsw"
 
+#define ZIP64_IPSW_IOS_TEST_URL \
+    @"https://updates.cdn-apple.com/2022SummerFCS/fullrestores/012-40433/32A26A01-DC35-4CE4-AA12-7C6AE005AE5F/iPhone_4.7_15.6_19G69_Restore.ipsw"
+
 int test_ota(NSString* url, NSUInteger expected_file_count) {
     NSError* error = nil;
 
@@ -65,10 +68,16 @@ int test_ota(NSString* url, NSUInteger expected_file_count) {
 
     assert([plist isEqualToDictionary:expected]);
 
+    data = [zip getFileForPath:@"AssetData/boot/BuildManifest.plist" error:&error];
+    if (!data) {
+        NSLog(@"Error: %@", error);
+        return 1;
+    }
+
     return 0;
 }
 
-int test_ipsw(NSString* url, NSUInteger expected_file_count) {
+int test_ipsw(NSString* url, NSUInteger expected_file_count, BOOL is_macos) {
     NSError* error = nil;
 
     Partial* zip = [Partial partialZipWithURL:[NSURL URLWithString:url] error:&error];
@@ -79,7 +88,12 @@ int test_ipsw(NSString* url, NSUInteger expected_file_count) {
     if (expected_file_count != -1) {
         assert(zip.files.count == expected_file_count);
     }
-    assert([zip.files containsObject:@"SystemVersion.plist"]);
+
+    if (is_macos) {
+        assert([zip.files containsObject:@"SystemVersion.plist"]);
+    } else {
+        assert([zip.files containsObject:@"BuildManifest.plist"]);
+    }
 
     // Does not exist
     NSData* nonExistentData = [zip getFileForPath:@"nonexistent" error:&error];
@@ -99,29 +113,38 @@ int test_ipsw(NSString* url, NSUInteger expected_file_count) {
         assert(emptyData.length == 0);
     }
 
-    NSData* data = [zip getFileForPath:@"SystemVersion.plist" error:&error];
+    if (is_macos) {
+        NSData* data = [zip getFileForPath:@"SystemVersion.plist" error:&error];
+        if (!data) {
+            NSLog(@"Error: %@", error);
+            return 1;
+        }
+
+        NSDictionary* plist = [NSPropertyListSerialization propertyListWithData:data options:NSPropertyListImmutable format:nil
+                                                                          error:&error];
+        if (!plist) {
+            NSLog(@"Error: %@", error);
+            return 1;
+        }
+
+        NSDictionary* expected = @ {
+            @"BuildID": @"BD8B3086-E741-11EE-BB3B-BD0FBDA10519",
+            @"ProductBuildVersion": @"23E224",
+            @"ProductCopyright": @"1983-2024 Apple Inc.",
+            @"ProductName": @"macOS",
+            @"ProductUserVisibleVersion": @"14.4.1",
+            @"ProductVersion": @"14.4.1",
+            @"iOSSupportVersion": @"17.4",
+        };
+
+        assert([plist isEqualToDictionary:expected]);
+    }
+
+    NSData* data = [zip getFileForPath:@"BuildManifest.plist" error:&error];
     if (!data) {
         NSLog(@"Error: %@", error);
         return 1;
     }
-
-    NSDictionary* plist = [NSPropertyListSerialization propertyListWithData:data options:NSPropertyListImmutable format:nil error:&error];
-    if (!plist) {
-        NSLog(@"Error: %@", error);
-        return 1;
-    }
-
-    NSDictionary* expected = @ {
-        @"BuildID": @"BD8B3086-E741-11EE-BB3B-BD0FBDA10519",
-        @"ProductBuildVersion": @"23E224",
-        @"ProductCopyright": @"1983-2024 Apple Inc.",
-        @"ProductName": @"macOS",
-        @"ProductUserVisibleVersion": @"14.4.1",
-        @"ProductVersion": @"14.4.1",
-        @"iOSSupportVersion": @"17.4",
-    };
-
-    assert([plist isEqualToDictionary:expected]);
 
     return 0;
 }
@@ -140,11 +163,17 @@ int main(int argc, const char* argv[]) {
         }
         NSLog(@"ZIP OTA test passed!");
 
-        NSLog(@"Testing ZIP64 IPSW...");
-        if (test_ipsw(ZIP64_IPSW_TEST_URL, 1327) != 0) {
+        NSLog(@"Testing ZIP64 macOS IPSW...");
+        if (test_ipsw(ZIP64_IPSW_TEST_URL, 1327, true) != 0) {
             return 1;
         }
-        NSLog(@"ZIP64 IPSW test passed!");
+        NSLog(@"ZIP64 macOS IPSW test passed!");
+
+        NSLog(@"Testing ZIP64 iOS IPSW...");
+        if (test_ipsw(ZIP64_IPSW_IOS_TEST_URL, -1, false) != 0) {
+            return 1;
+        }
+        NSLog(@"ZIP64 iOS IPSW test passed!");
 
         NSLog(@"All tests passed!");
     }

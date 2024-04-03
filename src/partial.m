@@ -260,13 +260,14 @@
 }
 
 - (NSError*)_processZip64:(zip_central_directory_file_header*)fileHeader adjustedFields:(zip64_adjusted_fields*)adjusted {
-    uint64_t compressedSize = fileHeader->compressed_size;
+    // Note: The ZIP64 extra field has uncompressed/compressed in a different order from the central directory and local headers
     uint64_t uncompressedSize = fileHeader->uncompressed_size;
+    uint64_t compressedSize = fileHeader->compressed_size;
     uint64_t localHeaderOffset = fileHeader->local_header_offset;
     // We process this even though we don't need it as it simplifies the ZIP64 handling
     uint32_t diskNumberStart = fileHeader->disk_number_start;
-    log(@"Compressed size: %llu", compressedSize);
     log(@"Uncompressed size: %llu", uncompressedSize);
+    log(@"Compressed size: %llu", compressedSize);
     log(@"Local header offset: %llu", localHeaderOffset);
     log(@"Disk number start: %u", diskNumberStart);
 
@@ -279,10 +280,10 @@
         }
 
         int requiredZip64ExtraFieldSize = 0;
-        if (compressedSize == UINT32_MAX) {
+        if (uncompressedSize == UINT32_MAX) {
             requiredZip64ExtraFieldSize += sizeof(uint64_t);
         }
-        if (uncompressedSize == UINT32_MAX) {
+        if (compressedSize == UINT32_MAX) {
             requiredZip64ExtraFieldSize += sizeof(uint64_t);
         }
         if (localHeaderOffset == UINT32_MAX) {
@@ -311,15 +312,15 @@
 
                 char* currentField = (char*)zip64ExtraField + sizeof(zip_extra_field);
 
-                if (compressedSize == UINT32_MAX) {
-                    compressedSize = *(uint64_t*)currentField;
-                    log(@"New compressed size: %llu", compressedSize);
-                    currentField += sizeof(uint64_t);
-                }
-
                 if (uncompressedSize == UINT32_MAX) {
                     uncompressedSize = *(uint64_t*)currentField;
                     log(@"New uncompressed size: %llu", uncompressedSize);
+                    currentField += sizeof(uint64_t);
+                }
+
+                if (compressedSize == UINT32_MAX) {
+                    compressedSize = *(uint64_t*)currentField;
+                    log(@"New compressed size: %llu", compressedSize);
                     currentField += sizeof(uint64_t);
                 }
 
@@ -347,8 +348,8 @@
         }
     }
 
-    adjusted->compressed_size = compressedSize;
     adjusted->uncompressed_size = uncompressedSize;
+    adjusted->compressed_size = compressedSize;
     adjusted->local_header_offset = localHeaderOffset;
     adjusted->disk_number_start = diskNumberStart;
 
